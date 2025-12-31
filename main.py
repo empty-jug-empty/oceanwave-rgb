@@ -1,43 +1,39 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
-# 1. THE SPACE: 128x64 Grid
-ROWS, COLS = 64, 128
-N = ROWS * COLS
+# 1. Setup the Grid
+size = 64
+pixels = size * size  # 4096
+x_coord = np.linspace(0, 1, size)
+y_coord = np.linspace(0, 1, size)
+X, Y = np.meshgrid(x_coord, y_coord)
 
-# 2. THE VECTOR v: A Simple Sine Wave (Chapter 1)
-x = np.linspace(0, 4 * np.pi, COLS)
-# Create one row of a sine wave and tile it 64 times
-single_row = np.sin(x)
-# Reshape to (N, 1) to be a proper Column Vector
-v = np.tile(single_row, ROWS).reshape(N, 1)
+# 2. Define 4 Basis Vectors (The Columns of our Matrix A)
+# We flatten them to 4096-element columns
+v1 = np.sin(2 * np.pi * X).flatten()   # Horiz Low-Freq
+v2 = np.sin(10 * np.pi * X).flatten()  # Horiz High-Freq
+v3 = np.sin(2 * np.pi * Y).flatten()   # Vert Low-Freq
+v4 = np.sin(10 * np.pi * Y).flatten()  # Vert High-Freq
 
-# 3. THE OPERATOR S: The Shift Matrix (Chapter 2.4)
-# We use np.roll for efficiency, but mathematically it is Sv
-def move_right(vector, pixels=1):
-    # This is the equivalent of multiplying by S^pixels
-    # We reshape to grid for the operation, but input/output are column vectors
-    grid = vector.reshape((ROWS, COLS))
-    shifted_grid = np.roll(grid, shift=pixels, axis=1)
-    return shifted_grid.reshape(N, 1)
+# 3. Assemble Matrix A (4096 rows x 4 columns)
+# This matrix is your "Ocean Palette"
+A = np.column_stack((v1, v2, v3, v4))
 
-# 4. MANIPULATION: Scaling and Addition (Linear Combination)
-v_half_speed = move_right(v, 1)  # Shift 1 pixel
-v_double_height = 0.1 * v        # Scale (Chapter 2.1)
+def generate_ocean(weights):
+    """
+    weights: a vector x with 4 elements [c1, c2, c3, c4]
+    returns: the screen image b
+    """
+    # The Heart of Linear Algebra: Ax = b
+    # This dots the weights into our basis patterns
+    b = A @ weights 
+    
+    # Reshape back to 64x64 for the hardware
+    return b.reshape((size, size))
 
-# 5. THE DIGITAL TWIN: Matplotlib Visualization
-def show_ocean(vector, title):
-    plt.figure(figsize=(10, 5))
-    plt.imshow(vector.reshape((ROWS, COLS)), cmap='ocean')
-    plt.title(title)
-    plt.axis('on')
-    plt.show()
+# --- TEST DRIVE ---
+# Recipe: Heavy on low-freq horizontal, light on high-freq vertical
+x = np.array([1.5, 0.2, 0.0, 0.5]) 
+screen = generate_ocean(x)
 
-# Visualize the initial state
-show_ocean(v, "Original Wave (v)")
-
-# Visualize movement (The result of matrix-vector multiplication)
-v_moved = move_right(v, 5)
-show_ocean(v_moved, "The Wave After 10 Shifts (S^10 v)")
-
-show_ocean(v_double_height, "half Height Wave (0.5 v)")
+# Note: In a real ocean, these weights (x) will 
+# change over time according to physics!

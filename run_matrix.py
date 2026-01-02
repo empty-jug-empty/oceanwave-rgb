@@ -65,8 +65,9 @@ matrix = piomatter.PioMatter(
 # --- 3. Vectorized Color Mapping (Engineering Rigor) ---
 # We map the scalar field 'b' (height) to R^3 (Color Space)
 # Define color basis vectors for interpolation
-DEEP_BLUE = np.array([0, 0, 50], dtype=np.float32)
-CREST_WHITE = np.array([100, 150, 255], dtype=np.float32)
+# Tropical Palette: Deep Teal to Bright Turquoise
+COLOR_DEEP = np.array([0, 20, 50], dtype=np.float32)
+COLOR_CREST = np.array([0, 255, 200], dtype=np.float32)
 
 def scalar_field_to_rgb(field):
     """
@@ -80,8 +81,8 @@ def scalar_field_to_rgb(field):
     # Broadcasting: (64, 64, 1) * (3,) -> (64, 64, 3)
     # Linear Interpolation: Color = Deep + t * (Crest - Deep)
     # This is effectively a projection into Color Space
-    delta = CREST_WHITE - DEEP_BLUE
-    rgb_data = DEEP_BLUE + (normalized[..., np.newaxis] * delta)
+    delta = COLOR_CREST - COLOR_DEEP
+    rgb_data = COLOR_DEEP + (normalized[..., np.newaxis] * delta)
     
     return rgb_data.astype(np.uint8)
 
@@ -91,7 +92,7 @@ print("Press Ctrl+C to stop.")
 
 try:
     t = 0.0
-    dt = 0.1
+    dt = 0.03  # Slower time step for smoother, more relaxing waves
     
     while True:
         start_time = time.time()
@@ -99,10 +100,10 @@ try:
         # Dynamic weights x(t)
         # Changing the coefficients of our linear combination
         current_weights = np.array([
-            1.5 * np.cos(t),       # v1
-            0.5 * np.sin(t * 2),   # v2
-            0.3 * np.cos(t * 0.5), # v3
-            0.2                    # v4
+            1 * np.cos(t),       # v1
+            1 * np.sin(t * 2),   # v2
+            1 * np.cos(t * 0.5), # v3
+            1                   # v4
         ])
         
         # 1. Compute the state b = Ax

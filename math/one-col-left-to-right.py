@@ -21,7 +21,7 @@ for i in range(N):
 
 # 3. INITIAL STATE (Vector x): A vertical line (wave front)
 x_grid = np.zeros((N, N))
-x_grid[0,:,] = 1.0  # Start with a line at column 5
+x_grid[:,5] = 1.0  # Start with a line at column 5
 x = x_grid.flatten() # Flatten to 4,096-dimensional vector
 
 # 4. ANIMATION: b = Ax

@@ -27,7 +27,8 @@ for col in range(N):
     # Column 0 = 0.0 (Black/Purple), Column 63 = 1.0 (Red/White)
     x_grid[:, col] = col / N 
 
-x = x_grid.flatten() # Flatten to 4,096-dimensional vector
+x = x_grid.flatten().reshape(-1, 1)  # Shape: (4096, 1) - explicit column vector
+x = (A @ x).flatten()  # Result is also (4096, 1), then flatten for next iteration # Flatten to 4,096-dimensional vector
 
 # 4. ANIMATION: b = Ax
 fig, ax = plt.subplots()

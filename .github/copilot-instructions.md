@@ -18,6 +18,12 @@ Your mission is to translate Gilbert Strang's "Introduction to Linear Algebra" (
 3.  **Variable Naming:**
     * Use math-aligned names: `A_transform`, `x_flow`, `b_source`.
     * Avoid generic names like `data` or `input`.
+4.  **Column Vectors (Strict Convention):**
+    * **Always** use explicit column vectors: `x.reshape(-1, 1)` for shape `(4096, 1)`.
+    * **Never** rely on NumPy's broadcasting to "guess" vector orientation.
+    * *Rationale:* Matches Strang's notation where $\mathbf{x} \in \mathbb{R}^{n \times 1}$.
+    * *Example:* `x = x_grid.flatten().reshape(-1, 1)  # Shape: (4096, 1)`
+
 
 # III. The Hardware (Pi 5 + Matrix)
 1.  **Context Awareness:**

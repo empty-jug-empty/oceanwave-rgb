@@ -3,7 +3,7 @@ import sys
 import numpy as np
 
 # ============================================================================
-# NULLSPACE EDDIES — Ax = 0  (Strang Ch. 3)
+# NULLSPACE: TWO RUNNING CIRCLES  —  Ax = 0  (Strang Ch. 3)
 # ============================================================================
 # RGB DIGITAL TWIN of math/nullspace-eddies.py
 #
@@ -11,11 +11,13 @@ import numpy as np
 #   math/ version  →  matplotlib (laptop)
 #   rgb/  version  →  piomatter  (Pi 5 + 64×64 LED matrix)
 #
-# N(A) = { x : Ax = 0 }  is a SUBSPACE.
+# THE ONE IDEA:
+#   N(A) is a SUBSPACE.  If s₁, s₂ ∈ N(A), then
+#       x(t) = cos(ωt)·s₁ + sin(ωt)·s₂   is ALSO in N(A).
 #
-# For each eddy we build TWO basis vectors: sₖᴬ and sₖᴮ (90° apart).
-# The combination  x(t) = cos(ωt)·sₖᴬ + sin(ωt)·sₖᴮ
-# traces a CIRCLE in the Nullspace → visible rotation on the board.
+#   cos(ωt)·s₁ + sin(ωt)·s₂ = ring · cos(θ − ωt)  →  a spot that ORBITS
+#
+# Two circles: Blue = big center loop, Red = small corner loop.
 #
 # GEOMETRY: 64×64 grid, row-major.  Pixel (r,c) → index 64r + c.
 # ============================================================================
@@ -40,128 +42,49 @@ dim = N * N  # 4096
 cc, rr = np.meshgrid(np.arange(N, dtype=float), np.arange(N, dtype=float))
 
 
-# ── NULLSPACE BASIS VECTORS ─────────────────────────────────────────────────
+# ── BUILD BASIS VECTORS FOR ONE RING ────────────────────────────────────────
 
-def make_vortex_pair(center_r, center_c, radius, clockwise=True):
+def make_ring_pair(center_r, center_c, radius, width=3.0):
     """
-    Build a PAIR of nullspace basis vectors for one eddy.
+    Build TWO nullspace basis vectors for a running circle.
 
-    Both are divergence-free loops (Ax = 0).
-    They are 90° apart, so cos/sin mixing produces visible rotation.
+    s₁ = ring · cos(θ)   — bright at 3 o'clock
+    s₂ = ring · sin(θ)   — bright at 12 o'clock
 
-    Returns (uA, vA), (uB, vB) — each is (N, N).
+    The ring is a Gaussian annulus: bright at distance=radius, fades away.
+    Width controls how thick the ring is.
+
+    Returns s_cos, s_sin as column vectors (4096, 1).
     """
     dr = rr - center_r
     dc = cc - center_c
-    dist = np.sqrt(dr**2 + dc**2) + 1e-8
+    dist = np.sqrt(dr**2 + dc**2)
+    theta = np.arctan2(dr, dc)            # angle around center
 
-    # Ring-shaped envelope: peaks at r = radius, fades outside
-    envelope = (dist / radius) * np.exp(-(dist**2) / (2 * radius**2))
+    # Ring envelope: peaks at dist == radius
+    ring = np.exp(-((dist - radius)**2) / (2 * width**2))
 
-    # Normalised direction vectors
-    dr_hat = dr / dist
-    dc_hat = dc / dist
+    # Two basis vectors: same ring, 90° apart
+    grid_cos = ring * np.cos(theta)       # bright at 3 o'clock
+    grid_sin = ring * np.sin(theta)       # bright at 12 o'clock
 
-    # Phase A: tangential flow (perpendicular to radius)
-    uA = -dc_hat * envelope
-    vA =  dr_hat * envelope
+    # Flatten to strict column vectors (4096, 1)
+    s_cos = grid_cos.flatten().reshape(-1, 1)
+    s_sin = grid_sin.flatten().reshape(-1, 1)
 
-    # Phase B: rotated 90° → orthogonal partner
-    uB =  dr_hat * envelope
-    vB =  dc_hat * envelope
+    # Normalise so peak = 1
+    peak = max(np.max(np.abs(s_cos)), np.max(np.abs(s_sin)))
+    s_cos /= peak
+    s_sin /= peak
 
-    sign = -1.0 if clockwise else 1.0
-    uA, vA = sign * uA, sign * vA
-    uB, vB = sign * uB, sign * vB
-
-    return (uA, vA), (uB, vB)
+    return s_cos, s_sin
 
 
-# s₁: Large CLOCKWISE eddy — center
-(u1a, v1a), (u1b, v1b) = make_vortex_pair(32, 32, 14, clockwise=True)
+# ── Circle 1: BIG loop in the center ───────────────────────────────────────
+s1_cos, s1_sin = make_ring_pair(center_r=32, center_c=32, radius=16, width=4.0)
 
-# s₂: Small COUNTER-CLOCKWISE eddy — top-left corner
-(u2a, v2a), (u2b, v2b) = make_vortex_pair(14, 14, 8, clockwise=False)
-
-# s₃: Small COUNTER-CLOCKWISE eddy — bottom-right corner
-(u3a, v3a), (u3b, v3b) = make_vortex_pair(50, 50, 8, clockwise=False)
-
-
-# ── FLATTEN TO COLUMN VECTORS: sₖ ∈ ℝ^{4096×1} ────────────────────────────
-
-def to_col(grid):
-    """Flatten (64,64) grid → strict column vector (4096,1)."""
-    return grid.flatten().reshape(-1, 1)
-
-# Phase A vectors
-s1a_u, s1a_v = to_col(u1a), to_col(v1a)
-s2a_u, s2a_v = to_col(u2a), to_col(v2a)
-s3a_u, s3a_v = to_col(u3a), to_col(v3a)
-
-# Phase B vectors (90° rotated partners)
-s1b_u, s1b_v = to_col(u1b), to_col(v1b)
-s2b_u, s2b_v = to_col(u2b), to_col(v2b)
-s3b_u, s3b_v = to_col(u3b), to_col(v3b)
-
-# Normalise each pair so peak speed = 1
-all_pairs = [
-    (s1a_u, s1a_v, s1b_u, s1b_v),
-    (s2a_u, s2a_v, s2b_u, s2b_v),
-    (s3a_u, s3a_v, s3b_u, s3b_v),
-]
-for (au, av, bu, bv) in all_pairs:
-    peak = max(np.max(np.abs(au)), np.max(np.abs(av)),
-               np.max(np.abs(bu)), np.max(np.abs(bv)))
-    au /= peak; av /= peak; bu /= peak; bv /= peak
-
-
-# ── COLOR MAPPING ───────────────────────────────────────────────────────────
-# Identical angle→hue logic, but output is uint8 (0–255) for the LED matrix.
-
-def angle_to_rgb_uint8(u, v):
-    """
-    Representation Layer Bridge (Hardware):
-        Column vectors (4096,1) → reshape(64,64) → grid.
-        Row-major order: pixel (r,c) = index 64r + c.
-
-    Color:  angle of (u, v) → hue,  magnitude → brightness.
-    Output: (64, 64, 3) uint8 array ready for the framebuffer.
-    """
-    u2d = u.reshape(N, N)
-    v2d = v.reshape(N, N)
-
-    angle = np.arctan2(v2d, u2d)             # −π to π
-    mag = np.sqrt(u2d**2 + v2d**2)
-    mag = mag / (np.max(mag) + 1e-8)         # normalise to [0, 1]
-
-    # Hue from angle
-    hue = (angle + np.pi) / (2 * np.pi)      # [0, 1]
-
-    # HSV to RGB (S=1, V=magnitude)
-    rgb = np.zeros((N, N, 3))
-    h6 = hue * 6.0
-    sector = h6.astype(int) % 6
-    frac = h6 - np.floor(h6)
-
-    p = 0.0
-    q = mag * (1.0 - frac)
-    t = mag * frac
-
-    for s_val, (r_val, g_val, b_val) in enumerate([
-        (mag, t,   p),    # sector 0
-        (q,   mag, p),    # sector 1
-        (p,   mag, t),    # sector 2
-        (p,   q,   mag),  # sector 3
-        (t,   p,   mag),  # sector 4
-        (mag, p,   q),    # sector 5
-    ]):
-        mask = (sector == s_val)
-        rgb[mask, 0] = r_val[mask] if isinstance(r_val, np.ndarray) else r_val
-        rgb[mask, 1] = g_val[mask] if isinstance(g_val, np.ndarray) else g_val
-        rgb[mask, 2] = b_val[mask] if isinstance(b_val, np.ndarray) else b_val
-
-    # Scale to 0–255 with brightness cap, convert to uint8
-    return (np.clip(rgb, 0, 1) * 255 * BRIGHTNESS).astype(np.uint8)
+# ── Circle 2: SMALL loop in the top-right ──────────────────────────────────
+s2_cos, s2_sin = make_ring_pair(center_r=16, center_c=48, radius=9, width=3.0)
 
 
 # ── 2. HARDWARE SETUP ──────────────────────────────────────────────────────
@@ -185,9 +108,9 @@ matrix = piomatter.PioMatter(
 
 # ── 3. THE LOOP ────────────────────────────────────────────────────────────
 # Same update logic as math/nullspace-eddies.py:
-#   x(t) = Σₖ [ cos(ωₖt)·sₖᴬ + sin(ωₖt)·sₖᴮ ]   ∈ N(A)
+#   circle(t) = cos(ωt)·s_cos + sin(ωt)·s_sin   ∈ N(A)
 
-print("Starting Nullspace Eddies — orbiting in N(A)")
+print("Starting Two Running Circles in the Nullspace (Ax = 0)")
 print("Press Ctrl+C to stop")
 
 frame = 0
@@ -195,24 +118,23 @@ try:
     while True:
         start_time = time.time()
 
-        t = frame * 0.04
+        t = frame * 0.06
 
-        # Time-varying coefficients (identical to math/ version)
-        c1a, c1b = 0.7 * np.cos(0.8 * t), 0.7 * np.sin(0.8 * t)
-        c2a, c2b = 0.5 * np.cos(1.5 * t), 0.5 * np.sin(1.5 * t)
-        c3a, c3b = 0.5 * np.cos(2.1 * t), 0.5 * np.sin(2.1 * t)
+        # ── NULLSPACE LINEAR COMBINATION ────────────────────────────────
+        # Circle 1: clockwise
+        x1 = np.cos(1.0 * t) * s1_cos + np.sin(1.0 * t) * s1_sin
 
-        # ── NULLSPACE ORBIT ─────────────────────────────────────────────
-        x_u = (c1a*s1a_u + c1b*s1b_u
-             + c2a*s2a_u + c2b*s2b_u
-             + c3a*s3a_u + c3b*s3b_u)
+        # Circle 2: counter-clockwise (flip sin → minus)
+        x2 = np.cos(1.8 * t) * s2_cos - np.sin(1.8 * t) * s2_sin
 
-        x_v = (c1a*s1a_v + c1b*s1b_v
-             + c2a*s2a_v + c2b*s2b_v
-             + c3a*s3a_v + c3b*s3b_v)
+        # ── REPRESENTATION LAYER ────────────────────────────────────────
+        # Column vectors (4096,1) → reshape to 64×64 → RGB uint8
+        spot1 = np.clip(x1.reshape(N, N), 0, 1)
+        spot2 = np.clip(x2.reshape(N, N), 0, 1)
 
-        # Representation Layer: column vectors → RGB → framebuffer
-        framebuffer[:] = angle_to_rgb_uint8(x_u, x_v)
+        framebuffer[:, :, 0] = (spot2 * 255 * BRIGHTNESS).astype(np.uint8)  # Red
+        framebuffer[:, :, 1] = 0                                             # Green
+        framebuffer[:, :, 2] = (spot1 * 255 * BRIGHTNESS).astype(np.uint8)  # Blue
         matrix.show()
 
         frame += 1

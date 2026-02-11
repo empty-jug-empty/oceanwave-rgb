@@ -88,12 +88,21 @@ try:
         # REPRESENTATION LAYER
         grid = x.reshape(N, N)
 
-        # Map to Green channel (Index 1) to match math file
-        # Add 0.2 brightness floor so the tail is visible
-        val = np.clip(grid + 0.2, 0, 1)
+        # 1. Separating the Signal
+        #    Positive part (Crest) goes to Green
+        #    Negative part (Trough) goes to Red (we flip sign to make it displayable)
+        val_pos = np.maximum(grid, 0)
+        val_neg = np.maximum(-grid, 0)
+
+        # 2. Gamma Correction (Boost tails for both)
+        val_pos = val_pos ** 0.6
+        val_neg = val_neg ** 0.6
         
-        framebuffer[:, :, 0] = 0
-        framebuffer[:, :, 1] = (val * 255 * BRIGHTNESS).astype(np.uint8)
+        # 3. Map to Colors
+        #    Red Channel   = Negative Signal
+        #    Green Channel = Positive Signal
+        framebuffer[:, :, 0] = (val_neg * 255 * BRIGHTNESS).astype(np.uint8)
+        framebuffer[:, :, 1] = (val_pos * 255 * BRIGHTNESS).astype(np.uint8)
         framebuffer[:, :, 2] = 0
         
         matrix.show()

@@ -3,129 +3,85 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 # ============================================================================
-# NULLSPACE: TWO RUNNING CIRCLES  —  Ax = 0  (Strang Ch. 3)
+# NULLSPACE: THE RUNNING CIRCLE  —  Ax = 0
 # ============================================================================
 #
-# THE ONE IDEA:
-#   N(A) is a SUBSPACE.  If s₁, s₂ ∈ N(A), then
-#       x(t) = cos(ωt)·s₁ + sin(ωt)·s₂   is ALSO in N(A).
+# QUESTION: How can flow move if the equation is Ax = 0 (Total Balance)?
+# ANSWER:   It moves in a LOOP.
 #
-# WHY A LOOP IS IN THE NULLSPACE:
-#   A loop = flow goes around and comes back.
-#   Nothing accumulates at any node → Ax = 0.
+# The Nullspace contains every possible loop.
+# Here we build one simple circle in the center.
 #
-# WHAT YOU SEE:
-#   A bright spot running around a ring.
-#   That motion comes from two STATIC basis vectors
-#     s₁ = ring · cos(θ)    (bright at 3 o'clock)
-#     s₂ = ring · sin(θ)    (bright at 12 o'clock)
-#   combined with cos/sin coefficients:
+# MATH:
+#   We build two static basis vectors s₁ and s₂ in the Nullspace.
+#     s₁ = Ring bright at 3 o'clock
+#     s₂ = Ring bright at 12 o'clock
 #
-#     cos(ωt)·s₁ + sin(ωt)·s₂ = ring · cos(θ − ωt)
-#                                        ^^^^^^^^^^
-#                                    a spot that ORBITS
+#   Then we mix them linearly:
+#     x(t) = cos(t)·s₁ + sin(t)·s₂
 #
-# TWO CIRCLES:
-#   Blue = big loop in the center (clockwise)
-#   Red  = small loop in the corner (counter-clockwise)
-#   Both are in N(A).  Their sum is in N(A).  Always.
-#
-# GEOMETRY: 64×64 grid, row-major.  Pixel (r,c) → index 64r + c.
+#   Result: A bright spot that ORBITS the center.
 # ============================================================================
 
 N = 64
-dim = N * N  # 4096
+dim = N * N
 
-# Coordinate grids
-cc, rr = np.meshgrid(np.arange(N, dtype=float), np.arange(N, dtype=float))
+# ── 1. THE MATH: BUILD THE BASIS VECTORS ────────────────────────────────────
+# We need coordinate grids to calculate angles and distances
+cc, rr = np.meshgrid(np.arange(N), np.arange(N))
 
+# Define the circle geometry
+center = 32
+radius = 16
+dr = rr - center
+dc = cc - center
+angle = np.arctan2(dr, dc)
+dist = np.sqrt(dr**2 + dc**2)
 
-# ── BUILD BASIS VECTORS FOR ONE RING ────────────────────────────────────────
+# Create the ring shape (Gaussian thickness)
+ring_shape = np.exp(-((dist - radius)**2) / (2 * 2.0**2))
 
-def make_ring_pair(center_r, center_c, radius, width=3.0):
-    """
-    Build TWO nullspace basis vectors for a running circle.
+# Create the two basis vectors (Static snapshots)
+# s1: Bright spot at angle 0 (Right/3 o'clock)
+grid_s1 = ring_shape * np.cos(angle)
 
-    s₁ = ring · cos(θ)   — bright at 3 o'clock
-    s₂ = ring · sin(θ)   — bright at 12 o'clock
+# s2: Bright spot at angle 90 (Top/12 o'clock)
+grid_s2 = ring_shape * np.sin(angle)
 
-    The ring is a Gaussian annulus: bright at distance=radius, fades away.
-    Width controls how thick the ring is.
-
-    Returns s_cos, s_sin as column vectors (4096, 1).
-    """
-    dr = rr - center_r
-    dc = cc - center_c
-    dist = np.sqrt(dr**2 + dc**2)
-    theta = np.arctan2(dr, dc)            # angle around center
-
-    # Ring envelope: peaks at dist == radius
-    ring = np.exp(-((dist - radius)**2) / (2 * width**2))
-
-    # Two basis vectors: same ring, 90° apart
-    grid_cos = ring * np.cos(theta)       # bright at 3 o'clock
-    grid_sin = ring * np.sin(theta)       # bright at 12 o'clock
-
-    # Flatten to strict column vectors (4096, 1)
-    s_cos = grid_cos.flatten().reshape(-1, 1)
-    s_sin = grid_sin.flatten().reshape(-1, 1)
-
-    # Normalise so peak = 1
-    peak = max(np.max(np.abs(s_cos)), np.max(np.abs(s_sin)))
-    s_cos /= peak
-    s_sin /= peak
-
-    return s_cos, s_sin
+# Flatten to strict Column Vectors (Dimensions: 4096 x 1)
+# These are our "Special Solutions" to Ax=0
+s1 = grid_s1.flatten().reshape(-1, 1)
+s2 = grid_s2.flatten().reshape(-1, 1)
 
 
-# ── Circle 1: BIG loop in the center ───────────────────────────────────────
-s1_cos, s1_sin = make_ring_pair(center_r=32, center_c=32, radius=16, width=4.0)
-
-# ── Circle 2: SMALL loop in the top-right ──────────────────────────────────
-s2_cos, s2_sin = make_ring_pair(center_r=16, center_c=48, radius=9, width=3.0)
-
-
-# ── ANIMATION ───────────────────────────────────────────────────────────────
-
+# ── 2. THE ANIMATION ────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(6, 6))
-ax.set_title("Two Running Circles in the Nullspace (Ax = 0)")
-ax.set_xlabel("Column (c)")
-ax.set_ylabel("Row (r)")
-
-img = ax.imshow(np.zeros((N, N, 3)), interpolation='nearest')
-
+ax.set_title("One Moving Solution in the Nullspace")
+img = ax.imshow(np.zeros((N, N, 3)))
 
 def update(frame):
-    """
-    Each frame:
-      circle₁(t) = cos(ω₁t)·s₁_cos + sin(ω₁t)·s₁_sin   (clockwise)
-      circle₂(t) = cos(ω₂t)·s₂_cos − sin(ω₂t)·s₂_sin   (counter-clockwise)
+    # FIX: Map 200 frames to exactly 3 full circles (3 * 2π).
+    # This prevents the visual jump/glitch when the loop restarts.
+    total_frames = 200
+    cycles = 3
+    t = (frame / total_frames) * (cycles * 2 * np.pi)
 
-    Both are in N(A).  Their sum is in N(A).
-    The subspace property does ALL the work.
-    """
-    t = frame * 0.06
+    # LINEAR COMBINATION
+    # We are just adding two vectors. That's it.
+    # Because s1 and s2 are in Nullspace, x is in Nullspace.
+    x = np.cos(t) * s1 + np.sin(t) * s2
 
-    # ── NULLSPACE LINEAR COMBINATION ────────────────────────────────────
-    # Circle 1: clockwise
-    x1 = np.cos(1.0 * t) * s1_cos + np.sin(1.0 * t) * s1_sin
+    # ── REPRESENTATION LAYER ──────────────────────────
+    # Map the vector x back to the 64x64 grid
+    grid = x.reshape(N, N)
 
-    # Circle 2: counter-clockwise (flip sin → minus)
-    x2 = np.cos(1.8 * t) * s2_cos - np.sin(1.8 * t) * s2_sin
-
-    # ── REPRESENTATION LAYER ────────────────────────────────────────────
-    # Column vectors (4096,1) → reshape to 64×64 → RGB
-    spot1 = np.clip(x1.reshape(N, N), 0, 1)   # only positive half = lit
-    spot2 = np.clip(x2.reshape(N, N), 0, 1)
-
+    # Visualization: Red ring
     rgb = np.zeros((N, N, 3))
-    rgb[:, :, 2] = spot1    # Blue  = circle 1
-    rgb[:, :, 0] = spot2    # Red   = circle 2
+    # We use absolute value so the "negative" side of the wave is also visible
+    rgb[:, :, 1] = np.clip(grid + 0.2, 0, 1) # Red channel
 
     img.set_array(rgb)
     return [img]
 
-
-ani = FuncAnimation(fig, update, frames=600, interval=40, blit=True)
-plt.tight_layout()
+ani = FuncAnimation(fig, update, frames=200, interval=20, blit=True)
 plt.show()

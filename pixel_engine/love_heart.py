@@ -101,7 +101,7 @@ def frames():
         
         # 1. CALCULATION LAYER
         # We define two scales: Outer (Blue) and Inner (Red)
-        scale_blue = base_scale + 0.5  # Slightly larger
+        scale_blue = base_scale + 1  # Slightly larger
         scale_red = base_scale         # The main heart
         
         # Evaluate field for both scales
